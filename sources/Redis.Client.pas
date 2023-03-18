@@ -212,7 +212,7 @@ type
     procedure FLUSHDB;
     procedure FLUSHALL;
     procedure SELECT(const ADBIndex: Integer);
-    procedure AUTH(const aPassword: string);
+    procedure AUTH(const aPassword: string; const aUserName: string = '');
     function MOVE(const aKey: string; const aDB: Byte): boolean;
     function PERSIST(const aKey: string): boolean;
     function RANDOMKEY: TRedisString;
@@ -312,12 +312,16 @@ begin
   Result := APPEND(BytesOf(aKey), BytesOf(aValue));
 end;
 
-procedure TRedisClient.AUTH(const aPassword: string);
+procedure TRedisClient.AUTH(const aPassword: string;
+  const aUserName: string = '');
 begin
   FNextCMD := GetCmdList('AUTH');
+  if aUserName <> '' then
+    FNextCMD.Add(aUserName);
   FNextCMD.Add(aPassword);
   FTCPLibInstance.SendCmd(FNextCMD);
-  ParseSimpleStringResponse(FIsValidResponse);
+  ParseSimpleStringResponse({FIs}FValidResponse);
+  FValidResponse := False;
 end;
 
 function TRedisClient.BLPOP(const aKeys: array of string; const ATimeout: Int32; out Value: TArray<string>): boolean;
