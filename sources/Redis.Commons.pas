@@ -2,7 +2,7 @@
 //
 // Delphi REDIS Client
 //
-// Copyright (c) 2015-2021 Daniele Teti
+// Copyright (c) 2015-2024 Daniele Teti
 //
 // https://github.com/danieleteti/delphiredisclient
 //
@@ -38,6 +38,8 @@ const
   REDIS_NETLIB_INDY = 'indy';
 
 type
+  TRedisKeyList = TArray<string>;
+
   ERedisException = class(Exception)
   end;
 
@@ -97,6 +99,8 @@ type
     function KEYS(const AKeyPattern: string): TRedisArray;
     function INCR(const aKey: string): Int64;
     function DECR(const aKey: string): Int64;
+    function INCRBY(const aKey: string; const AValue: Int64): Int64;
+    function INCRBYFLOAT(const aKey: string; const AValue: double): double;
     function EXPIRE(const aKey: string; aExpireInSecond: UInt32): boolean;
     function PERSIST(const aKey: string): boolean;
     function RANDOMKEY: TRedisString;
@@ -116,6 +120,8 @@ type
     procedure HMSET(const aKey: string; aFields: TArray<string>; aValues: TArray<string>); overload;
     procedure HMSET(const aKey: string; aFields: TArray<string>; aValues: TArray<TBytes>); overload;
     function HSET(const aKey, aField: string; aValue: TBytes): Integer; overload;
+    function HSETNX(const aKey, aField: string; aValue: TBytes): Boolean; overload;
+    function HSETNX(const aKey, aField: string; aValue: string): Boolean; overload;
     function HGET(const aKey, aField: string; out aValue: TBytes): boolean; overload;
     function HGET(const aKey, aField: string; out aValue: string): boolean; overload;
     function HGET_AsBytes(const aKey, aField: string): TRedisBytes;
@@ -148,6 +154,9 @@ type
     function BRPOP(const aKeys: array of string; const aTimeout: Int32; out Value: TArray<string>): boolean; overload; deprecated 'Use BRPOP: TRedisArray';
     function BRPOP(const aKeys: array of string; const aTimeout: Int32): TRedisArray; overload;
     function LREM(const aListKey: string; const aCount: Integer; const aValue: string): Integer;
+    procedure LSET(const aListKey: string; const aCount: Integer; const aValue: string);
+    function LINDEX(const aListKey: string; const aCount: Integer): string; overload;
+    function LINDEX(const aListKey: string; const aCount: Integer; out AValue: string): boolean; overload;
 
     // sets
     function SADD(const aKey, aValue: TBytes): Integer; overload;
@@ -225,10 +234,12 @@ type
     // system
     procedure FLUSHDB;
     procedure FLUSHALL;
+    function PING: string;
     procedure SELECT(const aDBIndex: Integer);
     procedure AUTH(const aPassword: string); overload;
     procedure AUTH(const aUsername, aPassword: string); overload;
     function MOVE(const aKey: string; const aDB: Byte): boolean;
+    procedure SCAN(aPattern: string; aCallback: TProc<TArray<string>>);
 
     // raw execute
     function ExecuteAndGetRESPArray(const RedisCommand: IRedisCommand): TRedisRESPArray;

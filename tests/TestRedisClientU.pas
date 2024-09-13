@@ -2,7 +2,7 @@
 //
 // Delphi REDIS Client
 //
-// Copyright (c) 2015-2021 Daniele Teti
+// Copyright (c) 2015-2024 Daniele Teti
 //
 // https://github.com/danieleteti/delphiredisclient
 //
@@ -73,6 +73,8 @@ type
     procedure TestSETRANGE;
     procedure TestMSET;
     procedure TestINCR_DECR;
+    procedure TestINCBY;
+    procedure TestINCRBYFLOAT;
     procedure TestEXPIRE;
     procedure TestRENAME;
     procedure TestTYPE;
@@ -80,6 +82,7 @@ type
     procedure TestRPUSH_RPOP;
     procedure TestRPUSHX_LPUSHX;
     procedure TestLPUSH_LPOP;
+    procedure TestLSET_LINDEX;
     procedure TestLRANGE;
     procedure TestLLEN;
     procedure TestLTRIM;
@@ -121,6 +124,8 @@ type
     procedure TestSDIFF;
     procedure TestZREVRANGE;
     procedure TestZRANGE;
+
+    procedure TestSCAN;
 
     // test Redis 3.2+ commands
     procedure TestGEODIST;
@@ -507,7 +512,8 @@ procedure TestRedisClient.TestGEOHASH;
 var
   lArrResp: TRedisArray;
 begin
-  lArrResp := FRedis.GEOHASH(KEY_GEODATA, ['roma', 'milano']);
+  LoadGeoData;
+  lArrResp := FRedis.GEOHASH(KEY_GEODATA, ['rome', 'milan']);
   CheckTrue(lArrResp.HasValue);
   CheckEquals(2, lArrResp.Count);
   CheckTrue(lArrResp.Items[0].HasValue);
@@ -526,19 +532,19 @@ begin
   lMatrixResp := FRedis.GEOPOS(KEY_GEODATA, ['rome']);
   CheckFalse(lMatrixResp.IsNull);
   CheckFalse(lMatrixResp.Items[0].IsNull);
-  CheckEqualsString('41.90000206232070923', FloatToStr(RoundTo(StrToFloat(lMatrixResp.Items[0].Items[1], LFormatSettings), -6), LFormatSettings));
-  CheckEqualsString('12.48330019941216307', lMatrixResp.Items[0].Items[0]);
+  CheckEqualsString('41.895999', FloatToStr(RoundTo(StrToFloat(lMatrixResp.Items[0].Items[1], LFormatSettings), -6), LFormatSettings));
+  CheckEqualsString('12.48329848051071167', lMatrixResp.Items[0].Items[0]);
 
   lMatrixResp := FRedis.GEOPOS(KEY_GEODATA, ['rome', 'milan']);
   CheckFalse(lMatrixResp.IsNull);
   CheckFalse(lMatrixResp.Items[0].IsNull);
   CheckFalse(lMatrixResp.Items[1].IsNull);
 
-  CheckEqualsString('41.90000206232070923', lMatrixResp.Items[0].Items[1]);
-  CheckEqualsString('12.48330019941216307', lMatrixResp.Items[0].Items[0]);
+  CheckEqualsString('41.89599921996744314', lMatrixResp.Items[0].Items[1]);
+  CheckEqualsString('12.48329848051071167', lMatrixResp.Items[0].Items[0]);
 
-  CheckEqualsString('45.46119779348373413', lMatrixResp.Items[1].Items[1]);
-  CheckEqualsString('9.1878002271457504', lMatrixResp.Items[1].Items[0]);
+  CheckEqualsString('45.46999914489508399', lMatrixResp.Items[1].Items[1]);
+  CheckEqualsString('9.20500069856643677', lMatrixResp.Items[1].Items[0]);
 end;
 
 procedure TestRedisClient.TestGEORADIUS;
@@ -831,6 +837,22 @@ begin
   CheckFalse(lResult.HasValue);
 end;
 
+procedure TestRedisClient.TestINCBY;
+begin
+  CheckEquals(2, FRedis.INCRBY('conrad', 2));
+  CheckEquals(4, FRedis.INCRBY('conrad', 2));
+  CheckEquals(0, FRedis.INCRBY('conrad', -4));
+  FRedis.DEL(['conrad']);
+end;
+
+procedure TestRedisClient.TestINCRBYFLOAT;
+begin
+  CheckEquals(1.34, FRedis.INCRBYFLOAT('conrad', 1.34), 1e-8);
+  CheckEquals(3, FRedis.INCRBYFLOAT('conrad', 1.66), 1e-8);
+  CheckEquals(0, FRedis.INCRBYFLOAT('conrad', -3), 1e-8);
+  FRedis.DEL(['conrad']);
+end;
+
 procedure TestRedisClient.TestINCR_DECR;
 begin
   FRedis.&SET('daniele', '-1');
@@ -927,6 +949,39 @@ begin
   CheckEquals('one', Value);
 
   CheckFalse(FRedis.LPOP('mylist', Value))
+end;
+
+procedure TestRedisClient.TestLSET_LINDEX;
+var
+  Value: string;
+begin
+  FRedis.DEL(['mylist']);
+
+  FRedis.LPUSH('mylist', ['one', 'two', 'three']);
+
+  FRedis.LSET('mylist', 0, '1');
+  FRedis.LSET('mylist', 1, '2');
+  FRedis.LSET('mylist', 2, '3');
+
+  CheckEquals('2', FRedis.LINDEX('mylist', 1));
+  CheckEquals('3', FRedis.LINDEX('mylist', 2));
+  CheckEquals('1', FRedis.LINDEX('mylist', 0));
+
+  CheckEquals(true, FRedis.LINDEX('mylist', 1, Value));
+  CheckEquals('2', Value);
+
+  CheckEquals(true, FRedis.LINDEX('mylist', 0, Value));
+  CheckEquals('1', Value);
+
+  CheckEquals(false, FRedis.LINDEX('mylist', 5, Value));
+
+  FArrResNullable := FRedis.LRANGE('mylist', 0, 3);
+  CheckEquals(3, Length(FArrResNullable.Value));
+  CheckEquals('1', FArrResNullable.Value[0]);
+  CheckEquals('2', FArrResNullable.Value[1]);
+  CheckEquals('3', FArrResNullable.Value[2]);
+
+  FRedis.DEL(['mylist']);
 end;
 
 procedure TestRedisClient.TestLRANGE;
@@ -1120,6 +1175,27 @@ begin
   CheckEquals('one', Value);
 
   CheckEquals(False, FRedis.RPOP('mylist', Value));
+end;
+
+procedure TestRedisClient.TestSCAN;
+begin
+  FRedis.&SET('A1','v1');
+  FRedis.&SET('A2','v1');
+  FRedis.&SET('A3','v1');
+  CheckTrue(FRedis.EXISTS('A1'));
+  CheckTrue(FRedis.EXISTS('A2'));
+  CheckTrue(FRedis.EXISTS('A3'));
+  FRedis.SCAN('A*',
+    procedure(Topics: TArray<string>)
+    begin
+      if Length(Topics) > 0 then
+      begin
+        FRedis.DEL(Topics);
+      end;
+    end);
+  CheckFalse(FRedis.EXISTS('A1'));
+  CheckFalse(FRedis.EXISTS('A2'));
+  CheckFalse(FRedis.EXISTS('A3'));
 end;
 
 procedure TestRedisClient.TestSDIFF;
